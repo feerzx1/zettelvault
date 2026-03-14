@@ -242,7 +242,7 @@ class CostTracker:
         tp = sum(p.prompt_tokens for p in self.phases)
         tcomp = sum(p.completion_tokens for p in self.phases)
         total = self.total_cost
-        print(f"{'TOTAL':<25} {tc:>6} " f"{tp:>10,} {tcomp:>10,} " f"${total:>11.6f}")
+        print(f"{'TOTAL':<25} {tc:>6} {tp:>10,} {tcomp:>10,} ${total:>11.6f}")
 
         # LiteLLM cost is more accurate (includes DSPy internal retries)
         if self._litellm_total > 0:

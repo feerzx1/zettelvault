@@ -344,8 +344,7 @@ def decompose_and_link(
 
     if already_done:
         print(
-            f"      {len(already_done)} notes already decomposed, "
-            f"{len(new_titles)} new"
+            f"      {len(already_done)} notes already decomposed, {len(new_titles)} new"
         )
 
     total_rlm_iters = 0

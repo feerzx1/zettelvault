@@ -19,7 +19,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --dev
       - name: Ruff check
         run: uv run ruff check .
       - name: Ruff format check
@@ -37,7 +37,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --dev
       - name: Run unit tests
         run: uv run pytest -x --tb=short -q
 
@@ -50,9 +50,9 @@ jobs:
         with:
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --dev
       - name: Check for known vulnerabilities
-        run: uv run pip audit
+        run: uv run pip-audit --ignore-vuln CVE-2025-69872  # diskcache (DSPy transitive dep), no fix available
       - name: Scan for secrets
         uses: trufflesecurity/trufflehog@main
         with:
