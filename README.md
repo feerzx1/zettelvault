@@ -22,6 +22,7 @@ Beyond vault restructuring, this project also serves as **reference code for usi
 - [Cost Tracking](#cost-tracking)
 - [Design Decisions](#design-decisions)
 - [Known Limitations](#known-limitations)
+- [Data Loss Prevention](#data-loss-prevention)
 - [Setup](#setup)
 - [Usage](#usage)
 - [Testing](#testing)
@@ -423,6 +424,70 @@ ZettelVault's pipeline sends note content through an LLM for decomposition. The 
 - **Frontmatter fields ARE preserved.** ZettelVault extracts frontmatter before LLM processing and merges it back into each atomic note. Generated fields (`tags`, `domain`, `subdomain`, `source`, `type`) take precedence; all other original properties are kept as-is.
 
 If your vault relies heavily on Dataview queries, Templater scripts, or other plugin-generated content embedded in note bodies, be aware that this content will likely need manual restoration after decomposition. Frontmatter-based plugin data (custom properties, aliases, cssclass) will survive without issues.
+
+## Data Loss Prevention
+
+ZettelVault processes your entire knowledge base through an LLM pipeline, so data safety is a core design concern, not an afterthought. The protections fall into five layers: preventing damage before it happens, surviving failures mid-run, keeping files safe on disk, preserving information through the LLM round-trip, and making everything observable.
+
+### Prevention: Stop Before Damage
+
+| Mechanism | What it does |
+|-----------|-------------|
+| **Dry-run mode** (`--dry-run`, `make dry-run`) | Runs the full classification and decomposition pipeline but prints a sample of results and exits before writing any files to disk. |
+| **Sample mode** (`--sample`) | Selects a small representative subset of notes for testing the full pipeline without processing the entire vault. |
+| **Limit flag** (`--limit N`) | Processes only the first N notes, useful for bounded testing before committing to a multi-hour full run. |
+| **LLM output validation** | Every LLM response is validated before acceptance: minimum 100 characters, must contain a real title (5+ chars), must contain a `Body:` field, and template garbage (`{decomposed}`, `## ]]`) is rejected. See `decompose.py:is_valid_output()`. |
+
+### Resilience: Survive Failures Mid-Run
+
+| Mechanism | What it does |
+|-----------|-------------|
+| **Progressive checkpointing** | Classification results are saved to `classified_notes.json` every 50 notes. Decomposition results are saved to `atomic_notes.json` after every single note. A crash after 400 of 800 notes loses at most 1 note's work. |
+| **Resume capability** (`make resume`, `make resume-all`) | Reloads cached checkpoint data so a crashed or interrupted run continues where it left off rather than restarting from zero. |
+| **Three-level fallback** | Decomposition uses a guaranteed-success chain: (1) RLM programmatic decomposition, (2) Predict with temperature retries, (3) passthrough that emits the original note unchanged. Every note always produces output. |
+| **Per-note error isolation** | Exceptions during decomposition of a single note are caught, logged, and skipped. One problematic note never crashes the entire pipeline. |
+| **Fallback logging** (`fallback_notes.json`) | Every note that used a degraded path (Predict or passthrough) is recorded with the reason, enabling targeted reprocessing later via `make reprocess`. |
+
+### File Safety: Don't Corrupt the Filesystem
+
+| Mechanism | What it does |
+|-----------|-------------|
+| **Filename collision handling** | When a note title matches an existing file, a counter suffix (`_1`, `_2`, ...) is appended instead of overwriting. See `writer.py:write_note()`. |
+| **Filename sanitization** | Unsafe characters (`< > : " / \ | ? *` and control characters) are replaced with hyphens to prevent filesystem errors. See `writer.py:_safe_filename()`. |
+| **Idempotent directory creation** | All `mkdir` calls use `parents=True, exist_ok=True`, making folder creation safe to repeat. |
+| **Configuration layering** | `config.yaml` (defaults) is overlaid by `config.local.yaml` (user overrides), with deep merge preserving unset keys. Misconfiguration in one layer doesn't destroy defaults. |
+
+### Information Preservation: Don't Lose Content Through the LLM
+
+This is the most critical layer. Files can be intact on disk while the *information inside them* has been silently mangled by the LLM. ZettelVault addresses this at every stage of the pipeline.
+
+| Mechanism | What it does |
+|-----------|-------------|
+| **Source note tracking** | Every atomic note carries a `source_note` field linking it back to the original note title, enabling audits and reconstruction. |
+| **Frontmatter preservation** | YAML frontmatter is extracted *before* LLM processing (`sanitize.py:extract_frontmatter()`), carried through the pipeline, and merged back into each output note. Generated fields (`tags`, `domain`, `subdomain`, `source`, `type`) override; all other original properties (aliases, cssclass, plugin fields) are kept as-is. |
+| **Wikilink round-trip** | `[[wikilinks]]` are escaped to Unicode guillemets (`<<` / `>>`) before sending to DSPy (avoiding collision with DSPy's `[[ ## field ## ]]` template markers), then restored to `[[brackets]]` after parsing. The round-trip is lossless. See `sanitize.py`. |
+| **Tag preservation** | Classification tags and domain assignments are attached to every atom produced from a note, whether via RLM, Predict, or passthrough. |
+| **Zero-loss passthrough guarantee** | If both RLM and Predict fail, the passthrough fallback emits the *complete original content* (not the truncated version sent to the LLM) as a single atomic note with all metadata intact. It is impossible for a note to enter the pipeline and not appear in the output. |
+| **Input truncation transparency** | Long notes are truncated to `max_input_chars` (default 8000) before LLM processing, but the full original content is preserved separately. The passthrough fallback always uses the full content. |
+| **Link resolution with stub creation** | Orphan wikilinks referenced by 3+ notes get stub notes created automatically (preserving the link graph). Dead links with fewer references are removed cleanly rather than left broken. See `resolve.py`. |
+| **Classification carry-forward** | PARA bucket, domain, and subdomain assignments from the classification phase are embedded in every atomic note, so organizational context is never lost even if decomposition degrades. |
+
+### Observability: Catch Problems Early
+
+| Mechanism | What it does |
+|-----------|-------------|
+| **Progress reporting with ETA** | Percentage complete, elapsed time, and estimated time remaining are printed at regular intervals during both classification and decomposition phases. |
+| **Fallback audit trail** | `fallback_notes.json` records which notes fell back and why, so you can assess quality and selectively reprocess. |
+| **Checkpoint inspection** | `classified_notes.json` and `atomic_notes.json` are human-readable JSON files that can be inspected at any time, even mid-run. |
+
+### Known Gaps
+
+These are areas where data loss is theoretically possible and not yet mitigated:
+
+1. **Link rewriting is non-atomic.** `resolve.py` rewrites files in-place with `write_text()`. A crash mid-rewrite could leave a file in a partially written state. An atomic rename pattern would close this gap.
+2. **No automatic git integration.** The pipeline does not create git commits before destructive operations. Running inside a git repository and committing before a run is recommended but not enforced.
+3. **MOC pages are overwritten.** Map of Content pages are regenerated on each run without versioning. Domain-based naming makes accidental collisions unlikely, but previous MOC content is not preserved.
+4. **No multi-file transaction.** Notes are written individually. There is no mechanism to atomically write all notes in a batch or roll back a partial run's file output (though checkpoint-based resumption limits the blast radius).
 
 ## Setup
 
