@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Secrets
+.env
+
+# Claude Code local state
+.claude/
+# Virtual environments
+.venv
+
+# Local config overrides
+config.local.yaml
+
+testvault/
+ZettelVault1-test/
+*.json
+*.txt

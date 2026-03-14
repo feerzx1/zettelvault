@@ -1,0 +1,44 @@
+# ZettelVault configuration
+# Copy to config.local.yaml to override (gitignored).
+
+# ── LLM Models ───────────────────────────────────────────────────────────────
+
+# Primary model -- used for classification and as the RLM orchestrator
+# (the model that writes REPL code and reasons about decomposition).
+# Optional: adapter ("xml"|"json"), reasoning (OpenRouter reasoning params).
+model:
+  id: "qwen/qwen3.5-35b-a3b"
+  provider: "openrouter"            # LiteLLM provider prefix
+  max_tokens: 32000
+  temperature: 0.1                  # base temperature for classification
+  # adapter: "xml"                  # use XMLAdapter (recommended for Kimi K2.5)
+  # reasoning:                      # OpenRouter reasoning params (for thinking models)
+  #   enabled: false                # disable thinking mode for instant responses
+  route:                            # OpenRouter provider routing (optional)
+    only: ["Parasail"]
+
+# Sub-LM -- used inside RLM for llm_query() calls (semantic tasks like
+# generating titles, tags, and summaries). Can be a smaller/cheaper model.
+# If not set, the primary model is used for sub-LM calls too.
+sub_model:
+  id: "qwen/qwen3.5-35b-a3b"
+  provider: "openrouter"
+  max_tokens: 32000
+  route:
+    only: ["Parasail"]
+
+# ── RLM Settings ─────────────────────────────────────────────────────────────
+
+rlm:
+  max_iterations: 15                # REPL iterations before fallback
+  max_llm_calls: 30                 # sub-LM calls per decomposition
+  max_output_chars: 15000           # truncation limit per REPL output
+  verbose: false
+
+# ── Pipeline Settings ────────────────────────────────────────────────────────
+
+pipeline:
+  max_retries: 3                    # Predict fallback retry count
+  max_input_chars: 8000             # content truncation for LLM input
+  retry_temp_start: 0.1             # initial temperature for retries
+  retry_temp_step: 0.3              # temperature increment per retry
