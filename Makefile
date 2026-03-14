@@ -1,15 +1,17 @@
 .DEFAULT_GOAL := help
 
-PYTHON  := uv run --env-file .env -- python
-SOURCE  := Personal3
-DEST    := $(HOME)/Library/Mobile\ Documents/iCloud~md~obsidian/Documents/ZettelVault1
-LIMIT   := 0
-CONFIG  :=
+PYTHON      := uv run --env-file .env -- python
+SOURCE      := Personal3
+DEST        := $(HOME)/Library/Mobile\ Documents/iCloud~md~obsidian/Documents/ZettelVault1
+LIMIT       := 0
+CONFIG      :=
+SAMPLE_SIZE :=
 
 # ── Derived ──────────────────────────────────────────────────────────────────
-_LIMIT_FLAG  := $(if $(filter-out 0,$(LIMIT)),--limit $(LIMIT),)
-_CONFIG_FLAG := $(if $(CONFIG),--config $(CONFIG),)
-_FLAGS       := $(_LIMIT_FLAG) $(_CONFIG_FLAG)
+_LIMIT_FLAG       := $(if $(filter-out 0,$(LIMIT)),--limit $(LIMIT),)
+_CONFIG_FLAG      := $(if $(CONFIG),--config $(CONFIG),)
+_SAMPLE_SIZE_FLAG := $(if $(SAMPLE_SIZE),--sample-size $(SAMPLE_SIZE),)
+_FLAGS            := $(_LIMIT_FLAG) $(_CONFIG_FLAG)
 
 # ── Help ─────────────────────────────────────────────────────────────────────
 help:
@@ -18,6 +20,7 @@ help:
 	@echo "Pipeline targets:"
 	@echo "  run             Full pipeline (read -> classify -> decompose -> write)"
 	@echo "  dry-run         Classify + decompose, preview only (no file writes)"
+	@echo "  sample          Select ~10 representative notes for pipeline preview"
 	@echo "  resume          Skip classification, reuse classified_notes.json"
 	@echo "  resume-all      Skip classify + decompose, reuse atomic_notes.json"
 	@echo "  reprocess       Re-run only the notes that fell back to Predict"
@@ -36,26 +39,34 @@ help:
 	@echo "Variables (override on command line):"
 	@echo "  SOURCE    Source vault name(s), space-separated  [$(SOURCE)]"
 	@echo "  DEST      Destination vault path                 [ZettelVault1 in iCloud]"
-	@echo "  LIMIT     Process only first N notes (0=all)     [$(LIMIT)]"
-	@echo "  CONFIG    Path to config YAML override           [auto-detect]"
+	@echo "  LIMIT       Process only first N notes (0=all)     [$(LIMIT)]"
+	@echo "  CONFIG      Path to config YAML override           [auto-detect]"
+	@echo "  SAMPLE_SIZE Number of notes to sample              [from config, default 10]"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make run SOURCE=\"Personal2 Personal3\""
 	@echo "  make dry-run LIMIT=10"
 	@echo "  make run CONFIG=config.local.yaml"
 
+# ── Sampling ─────────────────────────────────────────────────────────────────
+sample:
+	$(PYTHON) -m zettelvault $(SOURCE) --sample $(_SAMPLE_SIZE_FLAG) $(_CONFIG_FLAG)
+	@echo ""
+	@echo "Sample created. Run pipeline on it with:"
+	@echo "  make dry-run SOURCE=$$(pwd)/_sample/$$(echo $(SOURCE) | tr ' ' '_') DEST=./preview"
+
 # ── Pipeline ─────────────────────────────────────────────────────────────────
 run:
-	$(PYTHON) zettelvault_dspy.py $(SOURCE) "$(DEST)" $(_FLAGS)
+	$(PYTHON) -m zettelvault $(SOURCE) "$(DEST)" $(_FLAGS)
 
 dry-run:
-	$(PYTHON) zettelvault_dspy.py $(SOURCE) "$(DEST)" --dry-run $(_FLAGS)
+	$(PYTHON) -m zettelvault $(SOURCE) "$(DEST)" --dry-run $(_FLAGS)
 
 resume:
-	$(PYTHON) zettelvault_dspy.py $(SOURCE) "$(DEST)" --skip-classification $(_FLAGS)
+	$(PYTHON) -m zettelvault $(SOURCE) "$(DEST)" --skip-classification $(_FLAGS)
 
 resume-all:
-	$(PYTHON) zettelvault_dspy.py $(SOURCE) "$(DEST)" --skip-decomposition $(_FLAGS)
+	$(PYTHON) -m zettelvault $(SOURCE) "$(DEST)" --skip-decomposition $(_FLAGS)
 
 reprocess:
 	@if [ ! -f fallback_notes.json ]; then \
@@ -64,7 +75,7 @@ reprocess:
 	fi
 	@count=$$($(PYTHON) -c "import json; print(len(json.load(open('fallback_notes.json'))))"); \
 	echo "Reprocessing $$count notes that fell back to Predict..."; \
-	$(PYTHON) zettelvault_dspy.py $(SOURCE) "$(DEST)" $(_FLAGS)
+	$(PYTHON) -m zettelvault $(SOURCE) "$(DEST)" $(_FLAGS)
 
 # ── Status ───────────────────────────────────────────────────────────────────
 status:
@@ -117,6 +128,6 @@ test-all:
 	uv run --env-file .env -- pytest tests/ -v
 
 lint:
-	uv run -- ruff check zettelvault_dspy.py
+	uv run -- ruff check zettelvault/
 
-.PHONY: help run dry-run resume resume-all reprocess status clean clean-all install test test-all lint
+.PHONY: help sample run dry-run resume resume-all reprocess status clean clean-all install test test-all lint

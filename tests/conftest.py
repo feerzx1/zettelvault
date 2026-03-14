@@ -1,3 +1,5 @@
+"""Shared fixtures for ZettelVault tests."""
+
 import sys
 from pathlib import Path
 

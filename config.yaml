@@ -42,3 +42,20 @@ pipeline:
   max_input_chars: 8000             # content truncation for LLM input
   retry_temp_start: 0.1             # initial temperature for retries
   retry_temp_step: 0.3              # temperature increment per retry
+  classify_checkpoint: 50           # save cache every N classified notes
+  concept_min_word_len: 4           # minimum word length for concept index
+  related_top_n: 20                 # top-N related notes for decomposition
+
+# ── Sampling ────────────────────────────────────────────────────────────────
+
+sample:
+  size: 10                              # default number of notes to sample
+  bullet_heavy_threshold: 0.40          # bullet lines / total lines
+  heading_heavy_threshold: 0.15         # heading lines / total lines (AND <20% bullet)
+  prose_heavy_threshold: 0.70           # prose lines / total lines
+
+# ── Link Resolution ──────────────────────────────────────────────────────────
+
+resolve:
+  fuzzy_threshold: 0.85             # SequenceMatcher ratio cutoff for fuzzy match
+  stub_min_refs: 3                  # minimum references before creating a stub note

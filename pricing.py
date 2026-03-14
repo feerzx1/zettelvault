@@ -23,7 +23,7 @@ Usage:
 import json
 import os
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from urllib.request import Request, urlopen
 
 import dspy
@@ -118,9 +118,7 @@ def _zero_rate(model_id: str, reason: str = "") -> ModelRate:
 # ── LM history inspection ────────────────────────────────────────────────────
 
 
-def _extract_history_usage(
-    lm, start_index: int
-) -> tuple[int, int, int, float]:
+def _extract_history_usage(lm, start_index: int) -> tuple[int, int, int, float]:
     """Extract token counts from DSPy LM history entries added since start_index.
 
     Returns (prompt_tokens, completion_tokens, calls, litellm_cost).
@@ -143,23 +141,24 @@ def _extract_history_usage(
             continue
         calls += 1
 
-        pt, ct = 0, 0
+        entry_prompt = 0
+        entry_completion = 0
 
         # Primary: top-level usage dict
         usage = entry.get("usage")
         if isinstance(usage, dict):
-            pt = usage.get("prompt_tokens", 0) or 0
-            ct = usage.get("completion_tokens", 0) or 0
+            entry_prompt = usage.get("prompt_tokens", 0) or 0
+            entry_completion = usage.get("completion_tokens", 0) or 0
 
         # Fallback: response object's usage attribute
-        if pt == 0 and ct == 0:
+        if entry_prompt == 0 and entry_completion == 0:
             resp = entry.get("response")
             if resp and hasattr(resp, "usage") and resp.usage:
-                pt = getattr(resp.usage, "prompt_tokens", 0) or 0
-                ct = getattr(resp.usage, "completion_tokens", 0) or 0
+                entry_prompt = getattr(resp.usage, "prompt_tokens", 0) or 0
+                entry_completion = getattr(resp.usage, "completion_tokens", 0) or 0
 
-        prompt_tokens += pt
-        completion_tokens += ct
+        prompt_tokens += entry_prompt
+        completion_tokens += entry_completion
 
         # DSPy also stores LiteLLM's calculated cost
         cost = entry.get("cost")
@@ -202,7 +201,9 @@ class CostTracker:
 
     @property
     def total_cost(self) -> float:
-        return sum(self.rate.cost(p.prompt_tokens, p.completion_tokens) for p in self.phases)
+        return sum(
+            self.rate.cost(p.prompt_tokens, p.completion_tokens) for p in self.phases
+        )
 
     @property
     def total_tokens(self) -> int:
@@ -241,11 +242,7 @@ class CostTracker:
         tp = sum(p.prompt_tokens for p in self.phases)
         tcomp = sum(p.completion_tokens for p in self.phases)
         total = self.total_cost
-        print(
-            f"{'TOTAL':<25} {tc:>6} "
-            f"{tp:>10,} {tcomp:>10,} "
-            f"${total:>11.6f}"
-        )
+        print(f"{'TOTAL':<25} {tc:>6} " f"{tp:>10,} {tcomp:>10,} " f"${total:>11.6f}")
 
         # LiteLLM cost is more accurate (includes DSPy internal retries)
         if self._litellm_total > 0:

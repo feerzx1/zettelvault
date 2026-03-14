@@ -19,5 +19,6 @@ config.local.yaml
 
 testvault/
 ZettelVault1-test/
+_sample/
 *.json
 *.txt
