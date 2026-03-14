@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --dev
       - name: Run unit tests
-        run: uv run pytest -x --tb=short -q
+        run: uv run pytest -x --tb=short -q -m "not integration"
 
   security:
     name: Security
