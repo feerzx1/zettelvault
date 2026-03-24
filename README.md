@@ -7,6 +7,8 @@
 
 Transform a messy [Obsidian](https://obsidian.md/) vault into clean **PARA + Zettelkasten** structure using LLMs.
 
+> **Security Notice (2026-03-24):** `litellm` versions >= 1.82.6 have been identified as compromised. This project pins `litellm<1.82.6` as a transitive dependency (via DSPy) to prevent installation of affected versions. If you have already installed litellm >= 1.82.6, remove it immediately and reinstall with the pinned constraint. See `pyproject.toml` for the version pin. This notice will be removed once the litellm maintainers have resolved the issue.
+
 Most knowledge workers accumulate hundreds of notes in Obsidian over time, but the vault gradually becomes a tangled mess of long-form drafts, bullet dumps, and half-finished thoughts. ZettelVault fixes that. It reads every note from one or more source vaults, classifies each into the [PARA](https://fortelabs.com/blog/para/) method (Projects / Areas / Resources / Archive), then decomposes each note into atomic [Zettelkasten](https://en.wikipedia.org/wiki/Zettelkasten) notes - one idea per note, heavily cross-linked. Under the hood, it uses [DSPy](https://github.com/stanfordnlp/dspy) for structured LLM interaction, with [dspy.RLM](https://dspy.ai/api/modules/RLM) (Recursive Language Models) as the primary decomposition strategy.
 
 Beyond vault restructuring, this project also serves as **reference code for using dspy.RLM for document decomposition** - a technique applicable to any use case where long-form documents need to be split into structured, atomic units.
